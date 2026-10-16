@@ -30,6 +30,8 @@ from starlette.responses import JSONResponse
 SESSIONS_FILE = os.environ.get("SESSIONS_FILE", "/app/sessions.yaml")
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
 PAGE_TEXT_LIMIT = int(os.environ.get("PAGE_TEXT_LIMIT", "6000"))
+# MCP gateways cap response size (Paperclip: 1 MB, base64 adds a third)
+SCREENSHOT_MAX_BYTES = int(os.environ.get("SCREENSHOT_MAX_BYTES", "600000"))
 STATE_DIR = os.environ.get("STATE_DIR", "/app/state")
 
 DEFAULT_FINAL = (
@@ -283,12 +285,17 @@ async def read_page(ctx: Context) -> str:
 
 @mcp.tool()
 async def screenshot(ctx: Context, full_page: bool = False) -> Image:
-    """PNG screenshot of the current tab."""
+    """JPEG screenshot of the current tab, compressed to stay under the gateway size limit."""
     session = _session(ctx)
     async with _locked(session):
         page = await _page(session)
-        data = await page.screenshot(type="png", full_page=full_page)
-    return Image(data=data, format="png")
+        for quality in (70, 45, 25):
+            data = await page.screenshot(type="jpeg", quality=quality, full_page=full_page)
+            if len(data) <= SCREENSHOT_MAX_BYTES:
+                break
+        else:
+            data = await page.screenshot(type="jpeg", quality=25, full_page=False)
+    return Image(data=data, format="jpeg")
 
 
 @mcp.tool()
@@ -391,7 +398,7 @@ def main() -> None:
         allowed_hosts=["127.0.0.1:*", "localhost:*"] + ALLOWED_HOSTS + [f"{h}:*" for h in ALLOWED_HOSTS if ":" not in h],
         allowed_origins=[],
     )
-    app = mcp.streamable_http_app(transport_security=security)
+    app = mcp.streamable_http_app(transport_security=security, json_response=True)
     app.add_middleware(BearerToken)
     uvicorn.run(app, host=os.environ.get("MCP_HOST", "0.0.0.0"), port=int(os.environ.get("MCP_PORT", "8765")), log_level="info")
 
