@@ -13,7 +13,7 @@ watches the same browser live and takes over whenever needed (login, two-factor 
 | Allowed / denied sites | Domain allowlist or denylist per session. Any navigation to a refused domain is blocked inside the browser, including after a redirect or within a frame. The denylist always wins. |
 | Separate final action | `click` refuses buttons that send, submit, pay or order. Only `submit_final` triggers them: set it to "ask first" in your MCP client or gateway, and every submission waits for human approval. |
 | Sensitive fields | `type_text` refuses password, payment card, IBAN and one-time-code fields. The human fills them in directly in the browser. |
-| Isolated sessions | Each access token opens its own browser (profile, logins, rules). A token never drives another session. |
+| Isolated sessions | Each access token has its own browser context (cookies, logins, rules). A token never drives another session. Several sessions can share one Chromium. |
 | Untrusted content | Page text is returned as data, never as instructions. |
 
 Site rules are re-read on every call: edit them without restarting.
@@ -52,12 +52,23 @@ human ──web UI (KasmVNC, behind your authentication)────────
    (32 characters minimum).
 3. `docker compose up -d`.
 4. Publish the browser web UI (port 3000) only behind strong authentication, never in the clear on the Internet.
-   Never publish the CDP port or the MCP server outside your private network.
+   Never publish the CDP port. Publish the MCP server only behind an authenticating proxy (for example a tunnel
+   with a service token), in addition to its bearer token.
 5. Register the server in your MCP client: streamable HTTP transport, path `/mcp`, header
    `Authorization: Bearer <MCP_TOKEN_ASSISTANT>`. Set `submit_final` to "ask first".
 
-Adding a session: duplicate the browser and gate services, add their two variables, and declare the session in
-`sessions.yaml` with its rules.
+### Several sessions
+
+Two ways to add a session, both declared in `sessions.yaml` with their own token and rules:
+
+- **Same Chromium, isolated context** (`isolated: true`): light, no new container. The session gets a fresh
+  browser context with its own cookies, invisible to other sessions. Its cookies and local storage are saved to
+  `STATE_DIR/<session>.json` (mode 600) after every call and restored when Chromium restarts. Session storage and
+  IndexedDB are not kept. Its windows show up in the shared web UI, so a human can log in there.
+- **Dedicated Chromium**: duplicate the browser and gate services and add their two variables. Full isolation,
+  including the web UI, at the cost of one more browser in memory.
+
+At most one session per Chromium can use the browser's own profile (no `isolated`).
 
 ## Recommendations
 

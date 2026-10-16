@@ -43,6 +43,7 @@ services:
     volumes:
       - ./sessions.yaml:/app/sessions.yaml:ro
       - ./policies:/app/policies:ro
+      - ./state:/app/state                # cookies of isolated sessions: keep private
     networks: [browsers]
 
 networks:

@@ -5,3 +5,4 @@ policies/*
 browser-*/
 __pycache__/
 *.egg-info/
+state/
