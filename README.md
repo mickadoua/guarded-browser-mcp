@@ -70,6 +70,12 @@ Two ways to add a session, both declared in `sessions.yaml` with their own token
 
 At most one session per Chromium can use the browser's own profile (no `isolated`).
 
+### One tab per agent
+
+If the MCP gateway forwards the caller's identity in `x-paperclip-agent-id` (header name configurable with
+`AGENT_HEADER`), each agent drives its own tab inside the session: agents of the same session share cookies and
+logins without navigating each other's pages. Without the header, all callers share the session's current tab.
+
 ## Recommendations
 
 - Only log in to the sites the agent needs in a session. Never your bank or your mailbox: whoever drives the
