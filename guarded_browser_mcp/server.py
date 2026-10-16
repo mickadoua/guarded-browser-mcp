@@ -215,7 +215,8 @@ TAG_SCRIPT = """
     const label = (el.getAttribute('aria-label') || el.innerText || el.value && type !== 'password' && el.value
       || el.getAttribute('placeholder') || el.getAttribute('name') || el.getAttribute('title') || '').trim().replace(/\\s+/g, ' ').slice(0, 80);
     const value = ['input', 'textarea'].includes(el.tagName.toLowerCase()) && type !== 'password' ? (el.value || '').slice(0, 40) : '';
-    out.push({ ref: n, tag: el.tagName.toLowerCase(), type, role: el.getAttribute('role') || '', label, value,
+    const href = el.tagName.toLowerCase() === 'a' && el.href ? el.href.split('?')[0].slice(0, 200) : '';
+    out.push({ ref: n, tag: el.tagName.toLowerCase(), type, role: el.getAttribute('role') || '', label, value, href,
       checked: el.checked === true, disabled: el.disabled === true });
   }
   return out;
@@ -279,7 +280,7 @@ async def read_page(ctx: Context) -> str:
     for e in elements:
         extra = ", ".join(x for x in (e["type"], e["role"], "checked" if e["checked"] else "", "disabled" if e["disabled"] else "",
                                       f"value \"{e['value']}\"" if e["value"] else "") if x)
-        lines.append(f"[{e['ref']}] {e['tag']} \"{e['label']}\"" + (f" ({extra})" if extra else ""))
+        lines.append(f"[{e['ref']}] {e['tag']} \"{e['label']}\"" + (f" ({extra})" if extra else "") + (f" → {e['href']}" if e["href"] else ""))
     return "\n".join(lines)
 
 
