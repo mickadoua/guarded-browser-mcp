@@ -1,0 +1,7 @@
+.env
+sessions.yaml
+policies/*
+!policies/example.yaml
+browser-*/
+__pycache__/
+*.egg-info/

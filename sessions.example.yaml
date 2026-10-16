@@ -1,0 +1,7 @@
+# One session = one Chromium browser (its profile, its logins), one access token, its site rules.
+# Secret values never live here: only the names of the environment variables that hold them.
+sessions:
+  assistant:
+    token_env: MCP_TOKEN_ASSISTANT        # token the MCP client sends as "Authorization: Bearer"
+    cdp_url_env: CDP_URL_ASSISTANT        # CDP URL of this session's browser, secret path included
+    policy: /app/policies/assistant.yaml

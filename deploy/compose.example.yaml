@@ -1,0 +1,49 @@
+# One "assistant" session: a Chromium with a web UI (KasmVNC), its CDP gate, and the MCP server.
+# Variables in .env: BROWSER_PASSWORD, CDP_TOKEN_ASSISTANT, MCP_TOKEN_ASSISTANT.
+# Adding a session = duplicate the first two services, then declare it in sessions.yaml.
+services:
+  browser-assistant:
+    image: lscr.io/linuxserver/chromium:latest
+    hostname: browser-assistant           # fixed name: otherwise Chromium sees its profile as locked after a recreate
+    restart: unless-stopped
+    shm_size: "1gb"
+    mem_limit: 2g
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - CUSTOM_USER=assistant
+      - PASSWORD=${BROWSER_PASSWORD:?}
+      # Chrome refuses remote debugging on the default profile: dedicated profile
+      - CHROME_CLI=--remote-debugging-port=9222 --user-data-dir=/config/profil
+    volumes:
+      - ./browser-assistant:/config
+    networks: [browsers]
+    # Web UI on port 3000: publish only behind strong authentication (reverse proxy, tunnel, SSO)
+
+  browser-assistant-cdp:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    network_mode: service:browser-assistant
+    environment:
+      - CDP_TOKEN=${CDP_TOKEN_ASSISTANT:?}
+      - CDP_HOST=browser-assistant
+      - NGINX_ENVSUBST_FILTER=CDP_
+    volumes:
+      - ./deploy/cdp-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  guarded-browser-mcp:
+    build: .
+    restart: unless-stopped
+    environment:
+      - SESSIONS_FILE=/app/sessions.yaml
+      - MCP_TOKEN_ASSISTANT=${MCP_TOKEN_ASSISTANT:?}
+      - CDP_URL_ASSISTANT=http://browser-assistant:9223/${CDP_TOKEN_ASSISTANT:?}/
+      - MCP_ALLOWED_HOSTS=guarded-browser-mcp
+    volumes:
+      - ./sessions.yaml:/app/sessions.yaml:ro
+      - ./policies:/app/policies:ro
+    networks: [browsers]
+
+networks:
+  browsers:

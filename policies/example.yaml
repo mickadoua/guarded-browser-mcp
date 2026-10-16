@@ -1,0 +1,17 @@
+# Navigation rules for one session, re-read on every call: edit without restarting.
+sites:
+  # allowlist: only domains in `allowed` (and their subdomains) open.
+  # denylist:  everything opens except `denied`.
+  # `denied` always wins, in both modes.
+  mode: allowlist
+  allowed:
+    - duckduckgo.com
+  denied:
+    - "*bank*"
+    - paypal.com
+    - accounts.google.com
+    - mail.google.com
+
+# Optional: case-insensitive regular expressions replacing the defaults.
+# final_actions: button labels reserved for submit_final.
+# sensitive_fields: fields where type_text is refused (in addition to password fields).
