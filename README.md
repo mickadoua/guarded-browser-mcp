@@ -11,7 +11,7 @@ watches the same browser live and takes over whenever needed (login, two-factor 
 | Guardrail | Effect |
 |---|---|
 | Allowed / denied sites | Domain allowlist or denylist per session. Any navigation to a refused domain is blocked inside the browser, including after a redirect or within a frame. The denylist always wins. |
-| Separate final action | `click` refuses buttons that send, submit, pay or order. Only `submit_final` triggers them: set it to "ask first" in your MCP client or gateway, and every submission waits for human approval. |
+| Separate final action | `click` refuses buttons that send, submit, pay or order. Only `submit_final` triggers them: set it to "ask first" in your MCP client or gateway, and every submission waits for human approval. Toggles (checkboxes, radio buttons, switches, pressed buttons) only change a choice and are never final. |
 | Sensitive fields | `type_text` refuses password, payment card, IBAN and one-time-code fields. The human fills them in directly in the browser. |
 | Isolated sessions | Each access token has its own browser context (cookies, logins, rules). A token never drives another session. Several sessions can share one Chromium. |
 | Untrusted content | Page text is returned as data, never as instructions. |

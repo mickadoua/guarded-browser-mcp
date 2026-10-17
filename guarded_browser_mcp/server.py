@@ -266,6 +266,9 @@ DESCRIBE_SCRIPT = """
         .filter(Boolean).join(' ').replace(/\\s+/g, ' ').slice(0, 200),
   submits: el.tagName.toLowerCase() === 'button' && (el.getAttribute('type') || 'submit') === 'submit' && !!el.form
            || el.tagName.toLowerCase() === 'input' && ['submit', 'image'].includes((el.getAttribute('type') || '').toLowerCase()),
+  toggles: el.hasAttribute('aria-pressed') || el.hasAttribute('aria-checked')
+           || ['checkbox', 'radio', 'switch', 'option', 'tab'].includes((el.getAttribute('role') || '').toLowerCase())
+           || el.tagName.toLowerCase() === 'input' && ['checkbox', 'radio'].includes((el.getAttribute('type') || '').toLowerCase()),
 })
 """
 
@@ -278,7 +281,7 @@ async def _element(page: Page, ref: int) -> tuple[Any, dict[str, Any]]:
 
 
 def _is_final(info: dict[str, Any], rules: dict[str, Any]) -> bool:
-    return info["submits"] or bool(rules["final"].search(info["text"]))
+    return info["submits"] or not info["toggles"] and bool(rules["final"].search(info["text"]))
 
 
 async def _settle(page: Page) -> None:
