@@ -9,4 +9,5 @@ sessions:
     token_env: MCP_TOKEN_SHOPPING
     cdp_url_env: CDP_URL_ASSISTANT        # same Chromium as "assistant"...
     isolated: true                        # ...in its own context, cookies saved to STATE_DIR/shopping.json
+    label: SHOP                           # page titles, hence window titles, start with [SHOP]
     policy: /app/policies/shopping.yaml

@@ -40,6 +40,16 @@ DEFAULT_FINAL = (
     r"souscrire|signer|submit|send|confirm|pay|order|buy|checkout|purchase|book|subscribe|sign"
 )
 DEFAULT_SENSITIVE = r"pass(word|wd)?|mot.?de.?passe|card|carte|cvv|cvc|cryptogramme|iban|bic|otp|one.?time|code.?sms|pin"
+TITLE_SCRIPT = """(prefix) => {
+  if (window.top !== window) return;
+  const apply = () => { if (!document.title.startsWith(prefix)) document.title = prefix + document.title; };
+  const watch = () => {
+    apply();
+    const target = document.head || document.documentElement;
+    if (target) new MutationObserver(apply).observe(target, { subtree: true, childList: true, characterData: true });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch); else watch();
+}"""
 
 mcp = MCPServer(name="guarded-browser", instructions=__doc__)
 _locks: dict[str, asyncio.Lock] = {}
@@ -62,7 +72,13 @@ def load_sessions() -> dict[str, dict[str, Any]]:
             raise SystemExit(f"session {name}: {cfg['token_env']} (32 characters minimum) or {cfg['cdp_url_env']} missing")
         if not re.fullmatch(r"[a-z0-9_-]+", name):
             raise SystemExit(f"session {name}: name must match [a-z0-9_-]+")
-        sessions[name] = {"token": token, "cdp": cdp, "policy": cfg["policy"], "isolated": bool(cfg.get("isolated"))}
+        label = cfg.get("label")
+        if label is not None and not re.fullmatch(r"[A-Za-z0-9 _-]{1,20}", str(label)):
+            raise SystemExit(f"session {name}: label must be 1 to 20 letters, digits, spaces, _ or -")
+        sessions[name] = {
+            "token": token, "cdp": cdp, "policy": cfg["policy"], "isolated": bool(cfg.get("isolated")),
+            "label": str(label) if label is not None else None,
+        }
     if not sessions:
         raise SystemExit("no session in sessions.yaml")
     tokens = [s["token"] for s in sessions.values()]
@@ -172,6 +188,9 @@ async def _context(session: str) -> BrowserContext:
     else:
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
     await context.route("**/*", _guard(session))
+    if cfg["label"]:
+        prefix = json.dumps("[" + cfg["label"] + "] ")
+        await context.add_init_script(f"({TITLE_SCRIPT})({prefix})")
     _contexts[session] = context
     return context
 

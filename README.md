@@ -65,6 +65,8 @@ Two ways to add a session, both declared in `sessions.yaml` with their own token
   browser context with its own cookies, invisible to other sessions. Its cookies and local storage are saved to
   `STATE_DIR/<session>.json` (mode 600) after every call and restored when Chromium restarts. Session storage and
   IndexedDB are not kept. Its windows show up in the shared web UI, so a human can log in there.
+  Add `label: SHOP` to prefix every page title of the session with `[SHOP] `, so its windows can be told
+  apart in the shared web UI.
 - **Dedicated Chromium**: duplicate the browser and gate services and add their two variables. Full isolation,
   including the web UI, at the cost of one more browser in memory.
 
