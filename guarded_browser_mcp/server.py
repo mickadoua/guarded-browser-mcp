@@ -2,6 +2,7 @@
 
 - Sites: domain allowlist or denylist per session (policy file, re-read on every call). Any page or frame
   navigation to a refused domain is blocked inside the browser itself.
+  The local network (names without a dot, private addresses) is refused unless listed as is in `allowed`.
 - Final actions: `click` refuses buttons that send, submit, pay or order; only `submit_final` triggers them.
   Set `submit_final` to "ask first" in your MCP client or gateway.
 - Typing: never into password, payment card, IBAN or one-time-code fields.
@@ -15,9 +16,11 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import hmac
+import ipaddress
 import json
 import os
 import re
+import unicodedata
 from typing import Any
 from urllib.parse import urlparse
 
@@ -39,6 +42,7 @@ DEFAULT_FINAL = (
     r"envoyer|valider|confirmer|soumettre|d[ée]clarer|payer|paiement|commander|acheter|r[ée]gler|r[ée]server|"
     r"souscrire|signer|submit|send|confirm|pay|order|buy|checkout|purchase|book|subscribe|sign"
 )
+INTERNAL_SUFFIXES = (".local", ".internal", ".lan", ".home.arpa", ".localhost")
 DEFAULT_SENSITIVE = r"pass(word|wd)?|mot.?de.?passe|card|carte|cvv|cvc|cryptogramme|iban|bic|otp|one.?time|code.?sms|pin"
 TITLE_SCRIPT = """(prefix) => {
   if (window.top !== window) return;
@@ -135,6 +139,48 @@ def _matches(host: str, pattern: str) -> bool:
     return host == pattern or host.endswith("." + pattern) or fnmatch.fnmatch(host, pattern)
 
 
+def _ipv4(host: str) -> ipaddress.IPv4Address | None:
+    """The address Chromium reads in a host whose last label is a number (127.1, 0x7f.1, 2130706433, 0177.0.0.1)."""
+    parts = host.split(".")
+    if not 1 <= len(parts) <= 4:
+        return None
+    numbers = []
+    for part in parts:
+        try:
+            if part[:2] in ("0x", "0X"):
+                numbers.append(int(part[2:] or "0", 16))
+            elif len(part) > 1 and part.startswith("0"):
+                numbers.append(int(part[1:], 8))
+            else:
+                numbers.append(int(part, 10))
+        except ValueError:
+            return None
+    *head, last = numbers
+    if any(n > 255 for n in head) or last >= 256 ** (5 - len(numbers)):
+        return None
+    value = last
+    for i, n in enumerate(head):
+        value += n << (8 * (3 - i))
+    return ipaddress.IPv4Address(value)
+
+
+def internal_host(host: str) -> bool:
+    """A name or address of the local network: containers of the browser's Docker network, LAN, loopback, cloud metadata."""
+    host = unicodedata.normalize("NFKC", host).lower().strip("[]").rstrip(".")
+    try:
+        ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = ipaddress.ip_address(host)
+    except ValueError:
+        last = host.rsplit(".", 1)[-1]
+        if not (last.isdigit() or last[:2] == "0x"):
+            return "." not in host or host.endswith(INTERNAL_SUFFIXES)
+        ip = _ipv4(host)
+        if ip is None:
+            return True
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return not ip.is_global or ip.is_multicast
+
+
 def site_allowed(url: str, rules: dict[str, Any]) -> tuple[bool, str]:
     parsed = urlparse(url)
     if parsed.scheme in ("about", "data", "blob", "chrome", "devtools"):
@@ -144,6 +190,8 @@ def site_allowed(url: str, rules: dict[str, Any]) -> tuple[bool, str]:
     host = (parsed.hostname or "").lower()
     if any(_matches(host, d) for d in rules["denied"]):
         return False, f"{host} is on the denied sites list"
+    if internal_host(host) and host not in rules["allowed"]:
+        return False, f"{host} is on the local network: refused unless listed as is in allowed"
     if rules["mode"] == "allowlist" and not any(_matches(host, d) for d in rules["allowed"]):
         return False, f"{host} is not on the allowed sites list"
     return True, ""
