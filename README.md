@@ -11,6 +11,7 @@ watches the same browser live and takes over whenever needed (login, two-factor 
 | Guardrail | Effect |
 |---|---|
 | Allowed / denied sites | Domain allowlist or denylist per session. Any navigation to a refused domain is blocked inside the browser, including after a redirect or within a frame. The denylist always wins. |
+| Local network refused | In both modes, names without a dot (Docker containers, `localhost`), `.local`, `.internal`, `.lan`, `.home.arpa` and `.localhost` names, and private, loopback, link-local or reserved addresses (cloud metadata `169.254.169.254` included, in every form Chromium reads, such as `127.1` or `2130706433`) are refused. A host listed as is in `allowed` still opens. |
 | Separate final action | `click` refuses buttons that send, submit, pay or order. Only `submit_final` triggers them: set it to "ask first" in your MCP client or gateway, and every submission waits for human approval. Toggles (checkboxes, radio buttons, switches, pressed buttons) only change a choice and are never final. |
 | Sensitive fields | `type_text` refuses password, payment card, IBAN and one-time-code fields. The human fills them in directly in the browser. |
 | Isolated sessions | Each access token has its own browser context (cookies, logins, rules). A token never drives another session. Several sessions can share one Chromium. |
@@ -84,6 +85,9 @@ logins without navigating each other's pages. Without the header, all callers sh
   browser acts on your behalf on every logged-in site.
 - Prefer `allowlist` mode.
 - Some sites detect automation: the human then finishes in the web UI.
+- Site rules apply to page and frame navigations, not to requests a page's JavaScript makes. A public name that
+  resolves to a private address (DNS rebinding) is not caught either: keep the browser on a network without
+  services it should not reach.
 
 ## License
 
