@@ -86,6 +86,8 @@ MCP gateways give up on a tool call after a fixed delay (Paperclip: 10 s by defa
 `open_url` stops loading after `GATEWAY_TIMEOUT - 4` s with a `navigation_timeout` error naming the URL. A tab
 that ran out of time is closed and the next call opens a new one.
 
+`/healthz` needs no token and answers 503 when a policy does not load or a session's Chromium does not answer.
+
 ## Recommendations
 
 - Only log in to the sites the agent needs in a session. Never your bank or your mailbox: whoever drives the

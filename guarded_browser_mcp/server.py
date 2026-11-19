@@ -543,8 +543,23 @@ class BearerToken(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+async def _browsers_answer() -> None:
+    for cdp in {cfg["cdp"] for cfg in SESSIONS.values()}:
+        async with _setup:
+            browser = await _browser(cdp)
+        probe = await browser.new_browser_cdp_session()
+        await probe.send("Browser.getVersion")
+        await probe.detach()
+
+
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(_request: Any) -> Any:
+    try:
+        for name in SESSIONS:
+            policy(name)
+        await asyncio.wait_for(_browsers_answer(), 5)
+    except Exception:
+        return JSONResponse({"status": "unhealthy"}, status_code=503)
     return JSONResponse({"status": "ok"})
 
 

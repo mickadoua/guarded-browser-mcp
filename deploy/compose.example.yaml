@@ -45,6 +45,13 @@ services:
       - ./policies:/app/policies:ro
       - ./state:/app/state                # cookies of isolated sessions: keep private
     networks: [browsers]
+    # Docker only marks the container unhealthy: restarting it takes an orchestrator or an autoheal container
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=8)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 networks:
   browsers:
