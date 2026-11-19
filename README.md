@@ -79,6 +79,13 @@ If the MCP gateway forwards the caller's identity in `x-paperclip-agent-id` (hea
 `AGENT_HEADER`), each agent drives its own tab inside the session: agents of the same session share cookies and
 logins without navigating each other's pages. Without the header, all callers share the session's current tab.
 
+### Time limits
+
+MCP gateways give up on a tool call after a fixed delay (Paperclip: 10 s by default, 60 s at most). Set
+`GATEWAY_TIMEOUT` (seconds, default 10) to that delay: every tool answers within `GATEWAY_TIMEOUT - 2` s, and
+`open_url` stops loading after `GATEWAY_TIMEOUT - 4` s with a `navigation_timeout` error naming the URL. A tab
+that ran out of time is closed and the next call opens a new one.
+
 ## Recommendations
 
 - Only log in to the sites the agent needs in a session. Never your bank or your mailbox: whoever drives the
