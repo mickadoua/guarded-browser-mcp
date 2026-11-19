@@ -21,13 +21,14 @@ import json
 import os
 import re
 import unicodedata
+import weakref
 from typing import Any
 from urllib.parse import urlparse
 
 import yaml
 from mcp.server.mcpserver import Context, Image, MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
-from playwright.async_api import Browser, BrowserContext, Page, Route, async_playwright
+from playwright.async_api import Browser, BrowserContext, Page, Request, Route, async_playwright
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -59,6 +60,8 @@ mcp = MCPServer(name="guarded-browser", instructions=__doc__)
 _locks: dict[str, asyncio.Lock] = {}
 _browsers: dict[str, Browser] = {}
 _contexts: dict[str, BrowserContext] = {}
+_isolated: weakref.WeakSet[BrowserContext] = weakref.WeakSet()
+_setup = asyncio.Lock()
 _tabs: dict[tuple[str, str], Page] = {}
 AGENT_HEADER = os.environ.get("AGENT_HEADER", "x-paperclip-agent-id")
 _playwright: dict[str, Any] = {}
@@ -197,15 +200,22 @@ def site_allowed(url: str, rules: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
+def _foreign(session: str, request: Request) -> bool:
+    try:
+        return request.frame.page.context is not _contexts.get(session)
+    except Exception:
+        return False
+
+
 def _guard(session: str):
     async def guard(route: Route) -> None:
         request = route.request
-        if request.resource_type == "document":
+        if request.resource_type == "document" and not _foreign(session, request):
             ok, _ = site_allowed(request.url, policy(session))
             if not ok:
                 await route.abort("blockedbyclient")
                 return
-        await route.continue_()
+        await route.fallback()
     return guard
 
 
@@ -226,21 +236,28 @@ async def _browser(cdp: str) -> Browser:
 
 async def _context(session: str) -> BrowserContext:
     cfg = SESSIONS[session]
-    browser = await _browser(cfg["cdp"])
-    context = _contexts.get(session)
-    if context and context.browser is browser and context in browser.contexts:
+    async with _setup:
+        browser = await _browser(cfg["cdp"])
+        context = _contexts.get(session)
+        if context and context.browser is browser and context in browser.contexts:
+            return context
+        if cfg["isolated"]:
+            state = _state_file(session)
+            context = await browser.new_context(storage_state=state if os.path.exists(state) else None)
+            _isolated.add(context)
+        else:
+            # browser.contexts comes from a set: its first item may be an isolated session's context
+            context = next((c for c in browser.contexts if c not in _isolated), None) or await browser.new_context()
+        _contexts[session] = context
+        try:
+            await context.route("**/*", _guard(session))
+            if cfg["label"]:
+                prefix = json.dumps("[" + cfg["label"] + "] ")
+                await context.add_init_script(f"({TITLE_SCRIPT})({prefix})")
+        except BaseException:
+            del _contexts[session]
+            raise
         return context
-    if cfg["isolated"]:
-        state = _state_file(session)
-        context = await browser.new_context(storage_state=state if os.path.exists(state) else None)
-    else:
-        context = browser.contexts[0] if browser.contexts else await browser.new_context()
-    await context.route("**/*", _guard(session))
-    if cfg["label"]:
-        prefix = json.dumps("[" + cfg["label"] + "] ")
-        await context.add_init_script(f"({TITLE_SCRIPT})({prefix})")
-    _contexts[session] = context
-    return context
 
 
 async def _page(session: str, agent: str | None = None) -> Page:
