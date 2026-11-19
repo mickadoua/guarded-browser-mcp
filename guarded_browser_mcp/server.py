@@ -320,7 +320,7 @@ async def _save_state(session: str) -> None:
 
 
 class _locked:
-    """Serialises the calls of one session and saves its cookies afterwards (isolated sessions)."""
+    """Serialises the calls of one session and saves its cookies after each successful call (isolated sessions)."""
 
     def __init__(self, session: str, agent: str | None = None) -> None:
         self.session = session

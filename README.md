@@ -82,9 +82,11 @@ logins without navigating each other's pages. Without the header, all callers sh
 ### Time limits
 
 MCP gateways give up on a tool call after a fixed delay (Paperclip: 10 s by default, 60 s at most). Set
-`GATEWAY_TIMEOUT` (seconds, default 10) to that delay: every tool answers within `GATEWAY_TIMEOUT - 2` s, and
-`open_url` stops loading after `GATEWAY_TIMEOUT - 4` s with a `navigation_timeout` error naming the URL. A tab
-that ran out of time is closed and the next call opens a new one.
+`GATEWAY_TIMEOUT` (seconds, default 10) to that delay: every tool is stopped after `GATEWAY_TIMEOUT - 2` s, and
+`open_url` stops loading after `GATEWAY_TIMEOUT - 4` s, with a `navigation_timeout` error naming the URL. A tab
+that ran out of time is closed and the next call opens a new one. If it does not close, isolated sessions lose
+their context, then the server drops its connection to Chromium: tabs of isolated sessions close, Chromium and
+the tabs of its own profile stay.
 
 `/healthz` needs no token and answers 503 when a policy does not load or a session's Chromium does not answer.
 
