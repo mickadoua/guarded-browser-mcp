@@ -9,11 +9,13 @@
 - Sessions: each access token has its own browser context (cookies, logins, site rules). A token never drives
   another session's context. Several sessions can share one Chromium as isolated contexts.
 - Tabs: when the gateway sends `x-paperclip-agent-id`, each agent drives its own tab in the shared session.
+  An agent's tab left unused for 15 minutes is closed; the next call opens a new one.
 - Page content is returned as data, never as instructions.
 """
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import fnmatch
 import functools
 import hmac
@@ -21,6 +23,7 @@ import ipaddress
 import json
 import os
 import re
+import time
 import unicodedata
 import weakref
 from typing import Any
@@ -47,6 +50,7 @@ GATEWAY_TIMEOUT = float(os.environ.get("GATEWAY_TIMEOUT", "10"))
 TOOL_DEADLINE = GATEWAY_TIMEOUT - 2
 NAVIGATION_TIMEOUT_MS = (TOOL_DEADLINE - 2) * 1000
 ACTION_TIMEOUT_MS = NAVIGATION_TIMEOUT_MS / 2
+IDLE_TAB_SECONDS = int(os.environ.get("IDLE_TAB_SECONDS", "900"))
 
 DEFAULT_FINAL = (
     r"envoyer|valider|confirmer|soumettre|d[ée]clarer|payer|paiement|commander|acheter|r[ée]gler|r[ée]server|"
@@ -72,6 +76,8 @@ _contexts: dict[str, BrowserContext] = {}
 _isolated: weakref.WeakSet[BrowserContext] = weakref.WeakSet()
 _setup = asyncio.Lock()
 _tabs: dict[tuple[str, str], Page] = {}
+_last_use: dict[tuple[str, str], float] = {}
+_reaper: asyncio.Task | None = None
 AGENT_HEADER = os.environ.get("AGENT_HEADER", "x-paperclip-agent-id")
 _playwright: dict[str, Any] = {}
 
@@ -274,6 +280,7 @@ async def _context(session: str) -> BrowserContext:
 
 
 async def _page(session: str, agent: str | None = None) -> Page:
+    global _reaper
     context = await _context(session)
     if agent is None:
         return context.pages[-1] if context.pages else await context.new_page()
@@ -281,6 +288,9 @@ async def _page(session: str, agent: str | None = None) -> Page:
     if page is None or page.is_closed() or page.context is not context:
         page = await context.new_page()
         _tabs[(session, agent)] = page
+    _last_use[(session, agent)] = time.monotonic()
+    if _reaper is None:
+        _reaper = asyncio.create_task(_reap_idle_tabs())
     return page
 
 
@@ -306,6 +316,24 @@ async def _discard(session: str, agent: str | None) -> None:
         except Exception:
             _contexts.pop(session, None)
     _browsers.pop(SESSIONS[session]["cdp"], None)
+
+
+async def _sweep_idle_tabs(now: float) -> None:
+    for key in [k for k, used in _last_use.items() if now - used >= IDLE_TAB_SECONDS]:
+        lock = _locks.get(f"{key[0]}/{key[1]}")
+        if lock is not None and lock.locked():
+            continue
+        del _last_use[key]
+        page = _tabs.pop(key, None)
+        if page is not None and not page.is_closed():
+            with contextlib.suppress(Exception):
+                await page.close()
+
+
+async def _reap_idle_tabs() -> None:
+    while True:
+        await asyncio.sleep(60)
+        await _sweep_idle_tabs(time.monotonic())
 
 
 async def _save_state(session: str) -> None:

@@ -79,6 +79,9 @@ If the MCP gateway forwards the caller's identity in `x-paperclip-agent-id` (hea
 `AGENT_HEADER`), each agent drives its own tab inside the session: agents of the same session share cookies and
 logins without navigating each other's pages. Without the header, all callers share the session's current tab.
 
+An agent's tab that receives no call for `IDLE_TAB_SECONDS` (900 by default) is closed, so pages left behind by
+finished runs stop using CPU. The agent's next call opens a new tab; cookies and logins stay in the session.
+
 ### Time limits
 
 MCP gateways give up on a tool call after a fixed delay (Paperclip: 10 s by default, 60 s at most). Set
